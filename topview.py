@@ -85,7 +85,7 @@ def get_label(index, hand, results):
             inndex = 3
             label = results.multi_handedness[3].classification[0].label
             score = results.multi_handedness[3].classification[0].score
-            # these are to draw handedness on the image. Not necessary
+            # these are to draw handedness on the image.
             text = '{} {}'.format(label, round(score, 2))
             coords = tuple(np.multiply(
                 np.array((hand.landmark[mp_hands.HandLandmark.WRIST].x, hand.landmark[mp_hands.HandLandmark.WRIST].y)),
