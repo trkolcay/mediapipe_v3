@@ -59,7 +59,7 @@ for mark in twohands_markers:
 
 markerz = pose_markers2 + lean_markers + twohands_markers2 + head_markers
 
-# uncomment and adapt if interested in writing face landmarks
+# uncomment and adapt if interested in writing all 468 face landmarks (+10 if refine_landmarks is 1)
 # face_markers = []
 # for val in range(1, 468):
 #    face_markers += ['x{}'.format(val), 'y{}'.format(val), 'z{}'.format(val), 'v{}'.format(val)]
@@ -73,7 +73,7 @@ def euc_dis(point_1, point_2):
     distance = math.sqrt((x1 - x)**2 + (y1 - y)**2)
     return distance
 
-# redundant with fesh mesh solution -- ignore
+# redundant with facemesh solution -- ignore
 # def circle_d(image, raw_coor):
 #    coords = int(raw_coor.x * frameWidth), int(raw_coor.y * frameHeight)
 #    draw_c = cv2.circle(image, coords, 1, (0, 255, 0), -1)
@@ -117,12 +117,10 @@ def blink_ratio(image, landmark):
 
     return ratio
 
-
-
 # loop through all the video files
 for ff in eachfile:
     timee = 0  # this will contain time information in the loop
-    start_time = time.time()
+    start_time = time.time()  # real time
     print(f'###########{ff} started at {time.strftime("%H:%M:%S", time.localtime())}###########')
 
     # initialise a csv
@@ -139,8 +137,7 @@ for ff in eachfile:
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     # below deals with camera calibration. I am a little out of my depth here...
-    # they are used in head, torso, gaze estimation using various matrices
-
+    # they are used in head, torso estimation using various matrices
     # camera matrix
     focal_length = 1 * frameWidth
     cam_matrix = np.array([[focal_length, 0, frameHeight / 2],
@@ -174,7 +171,7 @@ for ff in eachfile:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # mediapipe requirement
             image.flags.writeable = False  # apparently improves performance
             results = holistic.process(image)  # main container of data
-            # print(results.pose_landmarks) prints results on command line
+            # print(results.pose_landmarks)
 
             # Draw landmark annotations on the image.
             image.flags.writeable = True
@@ -281,6 +278,7 @@ for ff in eachfile:
                 else:
                     alter_lean = "Upright"
 
+                # drawing shoulder projection
                 l_shoulder_3d_projection, jacobian_l = cv2.projectPoints(l_shoulder_3d, rot_vec2, trans_vec2,
                                                                  cam_matrix, dist_matrix)
                 r_shoulder_3d_projection, jacobian_r = cv2.projectPoints(r_shoulder_3d, rot_vec2, trans_vec2,
@@ -311,6 +309,7 @@ for ff in eachfile:
             else:
                     pose_row = list(np.array([np.nan] * 34 * 4 + 1).flatten())
 
+            # get hand information
             lefty_row = []
             if results.left_hand_landmarks:
                 lefty = results.left_hand_landmarks.landmark
@@ -331,7 +330,7 @@ for ff in eachfile:
             else:
                 righty_row = list(np.array([np.nan] * 21 * 3).flatten())
 
-            # below will be used in head pose and gaze estimation based on rotation around axes
+            # below will be used in head pose estimation based on rotation around axes as well as for blinks
             face_2d = []
             face_3d = []
             face_row = []
@@ -392,11 +391,11 @@ for ff in eachfile:
                 else:
                     ratio2 = "Open"
 
-                # no need to write all the 468 face landmarks - just the head pose estimate above and head x,y,z
+                # writing rows
                 face_row = [np.round(head_x, 6), np.round(head_y, 6), np.round(head_z, 6),
                             text, text2, np.round(ratio, 2), ratio2]
 
-                # to draw nose point and gaze direction on the image
+                # to draw nose projection and blinks on the image
                 nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec,
                                                                  cam_matrix, dist_matrix)
 
@@ -439,7 +438,7 @@ for ff in eachfile:
 
             # uncommenting below because docker doesn't have access to my display, so it can't show real-time video
             # cv2.imshow('MediaPipe Holistic', cv2.flip(image, 1))
-            timee += (1000 / samplerate)
+            timee += (1000 / samplerate)  # for the next iteration
             print(f"FPS: {np.round(fps2, 2)} at {timee/1000} secs")
 
             # append row to the csv
