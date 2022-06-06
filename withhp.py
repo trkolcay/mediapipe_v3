@@ -1,11 +1,14 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import pandas as pd
 import csv
 import time
 import math
+from scipy import stats, signal
 from os import listdir
 from os.path import isfile, join
+from func_collect import euc_dis_blk, blink_ratio, velo_acc_calc
 
 # prepare folders for looping
 videoinput = "./video_input/shoulder/"
@@ -41,7 +44,8 @@ hand_right_markers = ['WRIST_R', 'THUMB_CPC_R', 'THUMB_MCP_R', 'THUMB_IP_R', 'TH
 
 # for estimations - not a mediapipe solution unlike above
 lean_markers = ["LEAN_X", "LEAN_Y", "LEAN_Z", "TORSO_LEAN", "ALTER_LEAN"]
-head_markers = ["HEAD_X", "HEAD_Y", "HEAD_Z", "HEAD_DIRECTION", "HEAD_TILT", "BLINK_RATIO", "BLINK"]
+head_markers = ["HEAD_X", "HEAD_Y", "HEAD_Z", "HEAD_DIRECTION", "HEAD_TILT", "BLINK_RATIO", "BLINK", "FOREHEAD_X",
+                "FOREHEAD_Y", "FOREHEAD_Z"]
 time_row = ['TIME']
 
 pose_markers2 = []
@@ -65,57 +69,6 @@ markerz = pose_markers2 + lean_markers + twohands_markers2 + head_markers
 #    face_markers += ['x{}'.format(val), 'y{}'.format(val), 'z{}'.format(val), 'v{}'.format(val)]
 
 whole_row = time_row + markerz  # + face_markers
-
-# Euclidean distance for blinks
-def euc_dis(point_1, point_2):
-    x, y = int(point_1.x * frameWidth), int(point_1.y * frameHeight)
-    x1, y1 = int(point_2.x * frameWidth), int(point_2.y * frameHeight)
-    distance = math.sqrt((x1 - x)**2 + (y1 - y)**2)
-    return distance
-
-# redundant with facemesh solution -- ignore
-# def circle_d(image, raw_coor):
-#    coords = int(raw_coor.x * frameWidth), int(raw_coor.y * frameHeight)
-#    draw_c = cv2.circle(image, coords, 1, (0, 255, 0), -1)
-#    return draw_c
-
-# Blinking Ratio
-def blink_ratio(image, landmark):
-    # RIGHT eye coordinates
-    # horizontal
-    rh_right = landmark[33]
-#    circle_d(image, rh_right)
-    rh_left = landmark[155]
-#    circle_d(image, rh_left)
-    # vertical line
-    rv_top = landmark[158]
-#    circle_d(image, rv_top)
-    rv_bottom = landmark[144]
-#    circle_d(image, rv_bottom)
-    # LEFT eye coordinates
-    # horizontal
-    lh_right = landmark[362]
-#    circle_d(image, lh_right)
-    lh_left = landmark[249]
-#    circle_d(image, lh_left)
-    # vertical
-    lv_top = landmark[387]
-#    circle_d(image, lv_top)
-    lv_bottom = landmark[380]
-#    circle_d(image, lv_bottom)
-    # calculate euclidean distances between outer landmarks
-    rh_dis = euc_dis(rh_right, rh_left)
-    rv_dis = euc_dis(rv_top, rv_bottom)
-
-    lv_dis = euc_dis(lv_top, lv_bottom)
-    lh_dis = euc_dis(lh_right, lh_left)
-
-    re_ratio = rh_dis/rv_dis
-    le_ratio = lh_dis/lv_dis
-
-    ratio = (re_ratio+le_ratio)/2
-
-    return ratio
 
 # loop through all the video files
 for ff in eachfile:
@@ -149,8 +102,8 @@ for ff in eachfile:
 
     # prepare video output with drawings
     samplerate = fps  # make it the same as current video # may need to reduce quality for faster processing later
-    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')  # (*'XVID') also an option
-    vidout = cv2.VideoWriter(videooutput+ff[:-4]+'.mp4', fourcc, fps=samplerate,
+    fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')  # (*'mp4v') also an option
+    vidout = cv2.VideoWriter(videooutput+ff[:-4]+'.avi', fourcc, fps=samplerate,
                              frameSize=(int(frameWidth), int(frameHeight)))
 
     # main routine
@@ -193,7 +146,7 @@ for ff in eachfile:
                 results.pose_landmarks,
                 mp_holistic.POSE_CONNECTIONS,
                 mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=2),
-                mp_drawing.DrawingSpec(color=(0, 255, 0 ), thickness=2, circle_radius=2))
+                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2))
             # landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
 
             # drawing hands
@@ -245,9 +198,9 @@ for ff in eachfile:
                 lean_2d = np.array(lean_2d, dtype=np.float64)
                 lean_3d = np.array(lean_3d, dtype=np.float64)
 
-
-                # PnP
-                success2, rot_vec2, trans_vec2 = cv2.solvePnP(lean_3d, lean_2d, cam_matrix, dist_matrix)
+                # PnP - different from the one for head as this is described to be more error-resistant
+                # ==> see the point about hips above
+                success2, rot_vec2, trans_vec2, inliers = cv2.solvePnPRansac(lean_3d, lean_2d, cam_matrix, dist_matrix)
 
                 # Rotation matrix
                 rotmat2, jac2 = cv2.Rodrigues(rot_vec2)
@@ -271,9 +224,9 @@ for ff in eachfile:
                 else:
                     torso_text = "Upright"
 
-                if r_shoulder_dis < -0.40:
+                if r_shoulder_dis > -0.10:
                     alter_lean = "Back"
-                elif r_shoulder_dis > -0.20:
+                elif r_shoulder_dis < -0.25:
                     alter_lean = "Forward"
                 else:
                     alter_lean = "Upright"
@@ -283,6 +236,8 @@ for ff in eachfile:
                                                                  cam_matrix, dist_matrix)
                 r_shoulder_3d_projection, jacobian_r = cv2.projectPoints(r_shoulder_3d, rot_vec2, trans_vec2,
                                                                         cam_matrix, dist_matrix)
+                # it seems like the projections above are not necessary
+                # l_shoulder_3d projection can replace what l2 but the result is worse somehow...
                 l1 = (int(l_shoulder_2d[0]), int(l_shoulder_2d[1]))
                 l2 = (int(l_shoulder_2d[0] + lean_y * 10), int(l_shoulder_2d[1] - lean_x * 10))
                 cv2.line(image, l1, l2, (255, 0, 255), 2)
@@ -296,16 +251,16 @@ for ff in eachfile:
                 pose_row = pose_row + lean_row
 
                 # draw on the video
-                cv2.putText(image, "Torso: " + torso_text, (1600, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0),
+                cv2.putText(image, "Torso: " + torso_text, (1600, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128),
                             2)
-                cv2.putText(image, "Alternative: " + alter_lean, (1600, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0),
+                cv2.putText(image, "Alternative: " + alter_lean, (1600, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128),
                             2)
                 cv2.putText(image, "x: " + str(np.round(lean_x, 2)), (1600, 400),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
                 cv2.putText(image, "y: " + str(np.round(lean_y, 2)), (1600, 450),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
                 cv2.putText(image, "z: " + str(np.round(lean_z, 2)), (1600, 500),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
             else:
                     pose_row = list(np.array([np.nan] * 34 * 4 + 1).flatten())
 
@@ -334,6 +289,7 @@ for ff in eachfile:
             face_2d = []
             face_3d = []
             face_row = []
+            forehead = []
             if results.face_landmarks:
                 face = results.face_landmarks.landmark
                 ratio = blink_ratio(image, face)
@@ -349,6 +305,10 @@ for ff in eachfile:
 
                     if idx == 454:
                         coords = tuple(np.multiply(np.array((lm.x, lm.y)), [1920, 1080]).astype(int))
+
+                    if idx == 9:
+                        fhead_x, fhead_y = int(lm.x * frameWidth), int(lm.y * frameHeight)
+                        forehead.append = ([fhead_x, fhead_y, lm.z])
 
                 face_2d = np.array(face_2d, dtype=np.float64)
                 face_3d = np.array(face_3d, dtype=np.float64)
@@ -384,21 +344,21 @@ for ff in eachfile:
                 else:
                     text2 = "No tilt"
 
-                if text == "Ahead" and ratio > 2.3:
+                if text == "Ahead" and ratio > 2.7:
                     ratio2 = "Blinked"
-                elif text == "Down" and ratio > 2.8:
+                elif text == "Down" and ratio > 3:
                     ratio2 = "Blinked"
                 else:
                     ratio2 = "Open"
 
                 # writing rows
                 face_row = [np.round(head_x, 6), np.round(head_y, 6), np.round(head_z, 6),
-                            text, text2, np.round(ratio, 2), ratio2]
+                            text, text2, np.round(ratio, 2), ratio2, forehead]
 
                 # to draw nose projection and blinks on the image
                 nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec,
                                                                  cam_matrix, dist_matrix)
-
+                # the first output of the above can go into p2 definition like nose_3d_projection[0][0][0] for example
                 p1 = (int(nose_2d[0]), int(nose_2d[1]))
                 p2 = (int(nose_2d[0] + head_y * 50), int(nose_2d[1] - head_x * 50))
                 cv2.line(image, p1, p2, (255, 0, 0), 2)
@@ -418,7 +378,7 @@ for ff in eachfile:
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             else:
-                face_row = list(np.array([np.nan] * 7).flatten())
+                face_row = list(np.array([np.nan] * 10).flatten())
 
             # make a row to write to  the csv
             new_row = pose_row + lefty_row + righty_row + face_row
@@ -452,6 +412,46 @@ for ff in eachfile:
     vidout.release()
     cap.release()
     cv2.destroyAllWindows()
+    print(f'Working on post-tracking processes of {ff}, started at {time.strftime("%H:%M:%S", time.localtime())}')
+    # linear interpolation up to 500ms of missing data
+    itp = pd.read_csv(csvoutput + ff[:-4] + '.csv')
+    itp.interpolate(limit=25, inplace=True, limit_direction='both')
+
+    # wrists are sliced to calculate whole arm velocity and acceleration
+    # indexes are sliced to calculate hand velocity and acceleration
+    # a landmark in the middle of the forehead is sliced to calculate head movement speed
+    # alternatives are possible
+    # sliced dataframes are named to create column names to be added to the original dataframe
+    l_wrist = itp[["X_LEFT_WRIST", "Y_LEFT_WRIST", "Z_LEFT_WRIST"]]
+    l_wrist.name = "L_WRIST"
+    r_wrist = itp[["X_RIGHT_WRIST", "Y_RIGHT_WRIST", "Z_RIGHT_WRIST"]]
+    r_wrist.name = "R_WRIST"
+    l_index = itp[["X_INDEX_FINGER_TIP_L", "Y_INDEX_FINGER_TIP_L", "Z_INDEX_FINGER_TIP_L"]]
+    l_index.name = "L_INDEX"
+    r_index = itp[["X_INDEX_FINGER_TIP_R", "Y_INDEX_FINGER_TIP_R", "Z_INDEX_FINGER_TIP_R"]]
+    r_index.name = "R_INDEX"
+    fhead = itp[["FOREHEAD_X", "FOREHEAD_Y", "FOREHEAD_Z"]]
+    fhead.name = "FHEAD"
+
+    # calculating velocity and acceleration
+    vlw = velo_acc_calc(l_wrist)
+    vrw = velo_acc_calc(r_wrist)
+    vli = velo_acc_calc(l_index)
+    vri = velo_acc_calc(r_index)
+    vf = velo_acc_calc(fhead)
+
+    # adding these to the original dataframe
+    itp2 = pd.DataFrame()
+    itp2 = pd.concat([itp, vlw, vrw, vli, vri, vf], axis=1)
+
+    # thumbs are sliced for gesture volume calculation with the index finger
+    # l_thumb = itp[["X_THUMB_TIP_L", "Y_THUMB_TIP_L", "Z_THUMB_TIP_L"]]
+    # l_thumb.name = "L_THUMB"
+    # r_thumb = itp[["X_THUMB_TIP_R", "Y_THUMB_TIP_R", "Z_THUMB_TIP_R"]]
+    # r_thumb.name = "R_THUMB"
+
+    # writing a csv
+    itp.to_csv(csvoutput + ff[:-4] + '.csv', index=False, na_rep='nan')
 
     end_time = time.time()
     print(f'###########{ff} ended at {time.strftime("%H:%M:%S", time.localtime())}'
