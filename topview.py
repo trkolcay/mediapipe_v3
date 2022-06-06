@@ -34,7 +34,6 @@ for mark in markerz:
 time_row = ['TIME', 'FRAME', 'INDEX', 'CONFIDENCE', 'HAND']  # the last four will be extracted in the function below
 whole_row = time_row + markerxyz
 
-
 # it turns the landmark coordinates and handedness results are stored separately
 # this means that coordinates are not associated with any hands directly
 # below tries to take care of that but there might be a better solution

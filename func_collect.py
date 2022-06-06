@@ -47,13 +47,15 @@ def blink_ratio(image, landmark):
 
 
 # below calculates 3D velocity anc acceleration vectors, computes euclidean norm of sums of both, and smooths them
-# requires a dataframe with three columns for x, y, z landmarks and produces a dataframe with 8 columns
+# then segments the nsu vectors of velocity and acceleration into movement/no movement (vel) and amplitude (acc)
+# it requires a dataframe with three columns for x, y, z landmarks and produces a dataframe with 12 columns
 # dataframe must be named (df.name) in the main file so that appended lists can be associated with that name
-def velo_acc_calc(df):
+def velo_acc_calc(df, vel_threshold, acc_threshold):
     column_names = ["VEL_X" + "_" + df.name, "VEL_Y" + "_" + df.name, "VEL_Z" + "_" + df.name,
                     "ACC_X" + "_" + df.name, "ACC_Y" + "_" + df.name, "ACC_Z" + "_" + df.name,
                     "VEL_NSUM" + "_" + df.name, "VEL_SMOOTH" + "_" + df.name,
-                    "ACC_NSUM" + "_" + df.name, "ACC_SMOOTH" + "_" + df.name]
+                    "ACC_NSUM" + "_" + df.name, "ACC_SMOOTH" + "_" + df.name,
+                    "VEL_THRESHOLD" + "_" + df.name, "ACC_THRESHOLD" + "_" + df.name]
 
     # prepare lists to be appended
     # time aligning with nan since velocity cannot be computed for the first frame (no r-1)
@@ -141,10 +143,39 @@ def velo_acc_calc(df):
             acc_nsum.append(np.nan)
 
     df2[6] = vel_nsum
-    # smoothing
+    # smoothing with Savitzky-Golay filter
     df2[7] = np.round(signal.savgol_filter(df2[6], 15, 5).astype(float), 0)
     df2[8] = acc_nsum
     df2[9] = np.round(signal.savgol_filter(df2[8], 15, 5).astype(float), 0)
+
+    # below segments velocity and acceleration vectors according to the thresholds set
+    for i in range(len(df2)):
+
+        if pd.isna(df2.iloc[i, 7]) == False:
+
+            if df2.iloc[i, 7] >= vel_threshold:
+
+                df2.loc[i, 10] = "Movement"
+
+            else:
+                df2.loc[i, 10] = "No Movement"
+
+        else:
+            df2.loc[i, 10] = np.nan
+
+        if pd.isna(df2.iloc[i, 9]) == False:
+
+            if df2.iloc[i, 9] >= acc_threshold:
+
+                df2.loc[i, 11] = "High Amp"
+
+            else:
+                df2.loc[i, 11] = "Low Amp"
+
+        else:
+
+            df2.loc[i, 11] = np.nan
+
     # rename columns as per above
     df2.columns = column_names
 
