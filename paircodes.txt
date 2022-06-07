@@ -1,0 +1,43 @@
+# Pair code: numbers are ERs and letters are EEs
+1_a
+1_b
+1_c
+1_d
+1_e
+
+### Example: 14_c ===> ER no: 14, third EE.
+
+# Above is extended by one of the camera codes below
+
+_sr # shoulder cam facing ER
+_se # shoulder cam facing EE
+
+_mr # facecam facing ER
+_me # facecam facing EE
+
+_to # topview cam
+_si # side cam
+
+### Example: 9_b_mr ===> ER no: 9, second EE, facacam facing the ER
+
+# Recall tasks
+### both will watch the video recorded by the side cam
+### so only pair code plus a code for recall participant is enough
+
+_rr # ER's recall
+_re # EE's recall
+
+###  Example 4_e_re ===> ER no: 4, fifth EE, EE's recall
+
+# Sound file
+### We will get two sound files I think
+### So pair code plus whose voice is the dominant voice 
+
+_vr # ER's
+_ve # EE's
+
+### Example 17_d_vr ER no: 17, fourth EE, ER's voice
+
+
+
+
