@@ -451,7 +451,7 @@ for ff in eachfile:
     # r_thumb.name = "R_THUMB"
 
     # writing a csv
-    itp.to_csv(csvoutput + ff[:-4] + '.csv', index=False, na_rep='nan')
+    itp2.to_csv(csvoutput + ff[:-4] + '.csv', index=False, na_rep='nan')
 
     end_time = time.time()
     print(f'###########{ff} ended at {time.strftime("%H:%M:%S", time.localtime())}'
