@@ -69,13 +69,13 @@ def velo_acc_calc(df, vel_threshold, acc_threshold):
     acc_nsum = [np.nan]
     t = 1 / fps
 
-    # main routine - fps and frameWidth to be passed where the functions imported to
+    # main routine - fps to be passed where the functions imported to
     for r in range(1, len(df)):
         if df.iloc[r,].isnull().any() == False and df.iloc[r - 1,].isnull().any() == False:
-            # euc_distance distance divided by framerate gives velocity
+            # distance divided by framerate gives velocity
             vlc_x = (int(df.iloc[r, 0]) - int(df.iloc[r - 1, 0])) / t
             vlc_y = (int(df.iloc[r, 1]) - int(df.iloc[r - 1, 1])) / t
-            vlc_z = (int((df.iloc[r, 2] * frameWidth)) - int((df.iloc[r - 1, 2] * frameWidth))) / t
+            vlc_z = (int(df.iloc[r, 2]) - int(df.iloc[r - 1, 2])) / t
 
             vel_x.append(vlc_x)
             vel_y.append(vlc_y)
@@ -125,7 +125,6 @@ def velo_acc_calc(df, vel_threshold, acc_threshold):
             euc_norm = math.sqrt((df2.iloc[r2, 0] - df2.iloc[r2 - 1, 0]) ** 2 +
                                (df2.iloc[r2, 1] - df2.iloc[r2 - 1, 1]) ** 2 +
                                (df2.iloc[r2, 2] - df2.iloc[r2 - 1, 2]) ** 2)
-
             vel_nsum.append(int(euc_norm))
 
         else:
@@ -136,7 +135,6 @@ def velo_acc_calc(df, vel_threshold, acc_threshold):
             acc_temp_nsum = math.sqrt((df2.iloc[r2, 3] - df2.iloc[r2 - 1, 3]) ** 2 +
                                     (df2.iloc[r2, 4] - df2.iloc[r2 - 1, 4]) ** 2 +
                                     (df2.iloc[r2, 5] - df2.iloc[r2 - 1, 5]) ** 2)
-
             acc_nsum.append(int(acc_temp_nsum))
 
         else:
@@ -150,30 +148,22 @@ def velo_acc_calc(df, vel_threshold, acc_threshold):
 
     # below segments velocity and acceleration vectors according to the thresholds set
     for i in range(len(df2)):
-
         if pd.isna(df2.iloc[i, 7]) == False:
-
             if df2.iloc[i, 7] >= vel_threshold:
-
                 df2.loc[i, 10] = "Movement"
 
             else:
                 df2.loc[i, 10] = "No Movement"
-
         else:
             df2.loc[i, 10] = np.nan
 
         if pd.isna(df2.iloc[i, 9]) == False:
-
             if df2.iloc[i, 9] >= acc_threshold:
-
                 df2.loc[i, 11] = "High Amp"
 
             else:
                 df2.loc[i, 11] = "Low Amp"
-
         else:
-
             df2.loc[i, 11] = np.nan
 
     # rename columns as per above

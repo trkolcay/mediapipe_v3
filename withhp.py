@@ -43,7 +43,8 @@ hand_right_markers = ['WRIST_R', 'THUMB_CPC_R', 'THUMB_MCP_R', 'THUMB_IP_R', 'TH
                       'PINKY_DIP_R', 'PINKY_TIP_R']
 
 # for estimations - not a mediapipe solution unlike above
-lean_markers = ["LEAN_X", "LEAN_Y", "LEAN_Z", "TORSO_LEAN", "ALTER_LEAN"]
+lean_markers = ["LEAN_X", "LEAN_Y", "LEAN_Z", "TORSO_LEAN", "ALTER_LEAN", "NECK_X", "NECK_Y", "NECK_Z",
+                "MHIP_X", "MHIP_Y", "MHIP_Z"]
 head_markers = ["HEAD_X", "HEAD_Y", "HEAD_Z", "HEAD_DIRECTION", "HEAD_TILT", "BLINK_RATIO", "BLINK", "FOREHEAD_X",
                 "FOREHEAD_Y", "FOREHEAD_Z"]
 time_row = ['TIME']
@@ -54,6 +55,11 @@ for mark in pose_markers:
         nm = pos + "_" + mark
         pose_markers2.append(nm)
 
+w_pose_markers = ['X_W_LEFT_WRIST', 'Y_W_LEFT_WRIST', 'Z_W_LEFT_WRIST', ' Vis_W_LEFT_WRIST',
+                  'X_W_RIGHT_WRIST', 'Y_W_RIGHT_WRIST', 'Z_W_RIGHT_WRIST', 'Vis_W_RIGHT_WRIST',
+                  'X_W_LEFT_INDEX', 'Y_W_LEFT_INDEX', 'Z_W_LEFT_INDEX', ' Vis_W_LEFT_INDEX',
+                  'X_W_RIGHT_INDEX', 'Y_W_RIGHT_INDEX', 'Z_W_RIGHT_INDEX', 'Vis_W_RIGHT_INDEX']
+
 twohands_markers = hand_left_markers + hand_right_markers
 twohands_markers2 = []
 for mark in twohands_markers:
@@ -61,7 +67,7 @@ for mark in twohands_markers:
         nm2 = pos + "_" + mark
         twohands_markers2.append(nm2)
 
-markerz = pose_markers2 + lean_markers + twohands_markers2 + head_markers
+markerz = pose_markers2 + lean_markers + twohands_markers2 + head_markers + w_pose_markers
 
 # uncomment and adapt if interested in writing all 468 face landmarks (+10 if refine_landmarks is 1)
 # face_markers = []
@@ -77,12 +83,12 @@ for ff in eachfile:
     print(f'###########{ff} started at {time.strftime("%H:%M:%S", time.localtime())}###########')
 
     # initialise a csv
-    with open(csvoutput+ff[:-4]+'.csv', mode='w', newline='') as cs:
+    with open(csvoutput + ff[:-4] + '.csv', mode='w', newline='') as cs:
         csv_writer = csv.writer(cs, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow(whole_row)
 
     # Read video frames
-    cap = cv2.VideoCapture(videoinput+ff)
+    cap = cv2.VideoCapture(videoinput + ff)
 
     # extract video properties
     frameWidth = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -103,7 +109,7 @@ for ff in eachfile:
     # prepare video output with drawings
     samplerate = fps  # make it the same as current video # may need to reduce quality for faster processing later
     fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')  # (*'mp4v') also an option
-    vidout = cv2.VideoWriter(videooutput+ff[:-4]+'.avi', fourcc, fps=samplerate,
+    vidout = cv2.VideoWriter(videooutput + ff[:-4] + '.avi', fourcc, fps=samplerate,
                              frameSize=(int(frameWidth), int(frameHeight)))
 
     # main routine
@@ -163,16 +169,16 @@ for ff in eachfile:
                 landmark_drawing_spec=mp_drawing_styles.get_default_hand_landmarks_style())
 
             # save landmarks in the right order to write into the csv as initialised above
-            # reverting normalised values and rounding visibility and z to 6 digits
+            # reverting normalised values and rounding visibility
             pose_row = []
             lean_row = []
             if results.pose_landmarks:
                 pose = results.pose_landmarks.landmark
                 pose_row = list(
-                np.array([[int(landmark.x * frameWidth),
-                           int(landmark.y * frameHeight),
-                           np.round(landmark.z, 6),
-                           np.round(landmark.visibility, 6)] for landmark in pose]).flatten())
+                    np.array([[int(landmark.x * frameWidth),
+                               int(landmark.y * frameHeight),
+                               int(landmark.z * frameWidth),
+                               np.round(landmark.visibility, 6)] for landmark in pose]).flatten())
 
                 # for estimating torso leans from shoulders and hips
                 # hips are problematic here as mp predicts them without really detecting them, which introduces jitters
@@ -180,20 +186,60 @@ for ff in eachfile:
                 # only left and right shoulders here (11 and 12)...
                 lean_2d = []
                 lean_3d = []
+                neck_3d = []
+                midhip_3d = []
                 for idx, lm in enumerate(pose):
+                    l_shoulder_2d = ()
+                    l_shoulder_3d = ()
+                    r_shoulder_2d = ()
+                    r_shoulder_3d = ()
+                    l_hip_2d = ()
+                    l_hip_3d = ()
+                    r_hip_2d = ()
+                    r_hip_3d = ()
                     if idx == 11 or idx == 12 or idx == 23 or idx == 24:  # landmark numbers
                         if idx == 11:
                             l_shoulder_2d = (lm.x * frameWidth, lm.y * frameHeight)  # for later use in projection
-                            l_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * 2000)  # random 2000
-                            l_shoulder_dis = lm.z
+                            l_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)  # random 2000
+                            l_shoulder_dis = lm.z * frameWidth
                         if idx == 12:
                             r_shoulder_2d = (lm.x * frameWidth, lm.y * frameHeight)
-                            r_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * 2000)
-                            r_shoulder_dis = lm.z
+                            r_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
+                            r_shoulder_dis = lm.z * frameWidth
 
-                        lean_x, lean_y = int(lm.x * frameWidth), int(lm.y * frameHeight)
+                        if len(l_shoulder_3d) and len(r_shoulder_3d) != 0:
+                            # locate neck half way between left and right shoulders
+                            neck_x = r_shoulder_3d[0] + ((l_shoulder_3d[0] - r_shoulder_3d[0]) / 2)
+                            neck_y = r_shoulder_3d[1] + ((l_shoulder_3d[1] - r_shoulder_3d[1]) / 2)
+                            neck_z = l_shoulder_3d[2] + ((r_shoulder_3d[2] - l_shoulder_3d[2]) / 2)
+                            neck_3d.append([neck_x, neck_y, neck_z])
+
+                        else:
+                            neck_3d.append([np.nan] * 3)
+
+                        if idx == 23:
+                            l_hip_2d = (lm.x * frameWidth, lm.y * frameHeight)  # for later use in projection
+                            l_hip_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)  # random 2000
+
+                        if idx == 24:
+                            r_hip_2d = (lm.x * frameWidth, lm.y * frameHeight)
+                            r_hip_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
+
+                        if len(l_hip_3d) and len(r_hip_3d) != 0:
+                            # locate mid half way between left and right hips
+                            hip_x = r_hip_3d[0] + ((l_hip_3d[0] - r_hip_3d[0]) / 2)
+                            hip_y = r_hip_3d[1] + ((l_shoulder_3d[1] - r_hip_3d[1]) / 2)
+                            hip_z = l_hip_3d[2] + ((r_hip_3d[2] - l_hip_3d[2]) / 2)
+                            midhip_3d.append([hip_x, hip_y, hip_z])
+
+                        else:
+                            midhip_3d.append([np.nan] * 3)
+
+                        lean_x, lean_y, lean_z = int(lm.x * frameWidth), int(lm.y * frameHeight), \
+                                                 int(lm.z * frameWidth)
+
                         lean_2d.append([lean_x, lean_y])
-                        lean_3d.append([lean_x, lean_y, lm.z])
+                        lean_3d.append([lean_x, lean_y, lean_z])
 
                 lean_2d = np.array(lean_2d, dtype=np.float64)
                 lean_3d = np.array(lean_3d, dtype=np.float64)
@@ -224,18 +270,18 @@ for ff in eachfile:
                 else:
                     torso_text = "Upright"
 
-                if r_shoulder_dis > -0.10:
+                if r_shoulder_dis > -192:
                     alter_lean = "Back"
-                elif r_shoulder_dis < -0.25:
+                elif r_shoulder_dis < -480:
                     alter_lean = "Forward"
                 else:
                     alter_lean = "Upright"
 
                 # drawing shoulder projection
                 l_shoulder_3d_projection, jacobian_l = cv2.projectPoints(l_shoulder_3d, rot_vec2, trans_vec2,
-                                                                 cam_matrix, dist_matrix)
+                                                                         cam_matrix, dist_matrix)
                 r_shoulder_3d_projection, jacobian_r = cv2.projectPoints(r_shoulder_3d, rot_vec2, trans_vec2,
-                                                                        cam_matrix, dist_matrix)
+                                                                         cam_matrix, dist_matrix)
                 # it seems like the projections above are not necessary
                 # l_shoulder_3d projection can replace what l2 but the result is worse somehow...
                 l1 = (int(l_shoulder_2d[0]), int(l_shoulder_2d[1]))
@@ -247,13 +293,15 @@ for ff in eachfile:
                 cv2.line(image, r1, r2, (128, 0, 128), 2)
 
                 # add to pose rows
-                lean_row = [np.round(lean_x, 6), np.round(lean_y, 6), np.round(lean_z, 6), torso_text, alter_lean]
+                lean_row = [np.round(lean_x, 6), np.round(lean_y, 6), np.round(lean_z, 6),
+                            torso_text, alter_lean, neck_3d, midhip_3d]
                 pose_row = pose_row + lean_row
 
                 # draw on the video
                 cv2.putText(image, "Torso: " + torso_text, (1600, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128),
                             2)
-                cv2.putText(image, "Alternative: " + alter_lean, (1600, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128),
+                cv2.putText(image, "Alternative: " + alter_lean, (1600, 350), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                            (128, 0, 128),
                             2)
                 cv2.putText(image, "x: " + str(np.round(lean_x, 2)), (1600, 400),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
@@ -262,16 +310,16 @@ for ff in eachfile:
                 cv2.putText(image, "z: " + str(np.round(lean_z, 2)), (1600, 500),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
             else:
-                    pose_row = list(np.array([np.nan] * 34 * 4 + 1).flatten())
-
+                pose_row = list(np.array([np.nan] * 34 * 4 + 4 + 3).flatten())
+                # above will crash --- add up the numbers properly yourself ---
             # get hand information
             lefty_row = []
             if results.left_hand_landmarks:
                 lefty = results.left_hand_landmarks.landmark
                 lefty_row = list(
-                np.array([[int(landmark.x * frameWidth),
-                           int(landmark.y * frameHeight),
-                           np.round(landmark.z, 6)] for landmark in lefty]).flatten())
+                    np.array([[int(landmark.x * frameWidth),
+                               int(landmark.y * frameHeight),
+                               int(landmark.z, *frameWidth)] for landmark in lefty]).flatten())
             else:
                 lefty_row = list(np.array([np.nan] * 21 * 3).flatten())
 
@@ -279,9 +327,9 @@ for ff in eachfile:
             if results.right_hand_landmarks:
                 righty = results.right_hand_landmarks.landmark
                 righty_row = list(
-                np.array([[int(landmark.x * frameWidth),
-                           int(landmark.y * frameHeight),
-                           np.round(landmark.z, 6)] for landmark in righty]).flatten())
+                    np.array([[int(landmark.x * frameWidth),
+                               int(landmark.y * frameHeight),
+                               int(landmark.z * frameWidth)] for landmark in righty]).flatten())
             else:
                 righty_row = list(np.array([np.nan] * 21 * 3).flatten())
 
@@ -297,18 +345,21 @@ for ff in eachfile:
                     if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199:  # landmark numbers
                         if idx == 1:
                             nose_2d = (lm.x * frameWidth, lm.y * frameHeight)  # for later use in estimation
-                            nose_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * 3000)  # random projection amount
+                            nose_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
 
-                        head_x, head_y = int(lm.x * frameWidth), int(lm.y * frameHeight)
+                        head_x, head_y, head_z = int(lm.x * frameWidth), int(lm.y * frameHeight), \
+                                                 int(lm.z * frameWidth)
+
                         face_2d.append([head_x, head_y])
-                        face_3d.append([head_x, head_y, lm.z])
+                        face_3d.append([head_x, head_y, head_z])
 
                     if idx == 454:
                         coords = tuple(np.multiply(np.array((lm.x, lm.y)), [1920, 1080]).astype(int))
 
                     if idx == 9:
-                        fhead_x, fhead_y = int(lm.x * frameWidth), int(lm.y * frameHeight)
-                        forehead.append = ([fhead_x, fhead_y, lm.z])
+                        fhead_x, fhead_y, fhead_z = int(lm.x * frameWidth), int(lm.y * frameHeight), \
+                                                    int(lm.z * frameWidth)
+                        forehead.append = ([fhead_x, fhead_y, fhead_z])
 
                 face_2d = np.array(face_2d, dtype=np.float64)
                 face_3d = np.array(face_3d, dtype=np.float64)
@@ -380,8 +431,26 @@ for ff in eachfile:
             else:
                 face_row = list(np.array([np.nan] * 10).flatten())
 
+            # this gives world coordinates of wrists and hands in metres with mid hip being 0
+            w_pose_row = []
+            if results.world.pose.landmarks:
+                w_pose = results.world_pose_landmarks.landmark
+                # division by 100 to get values in cms
+                w_pose_row2 = list(
+                    np.array([[int(landmark.x / 100),
+                               int(landmark.y / 100),
+                               int(landmark.z / 100),
+                               np.round(landmark.visibility, 6)] for landmark in w_pose]).flatten())
+
+                # 60-67 left-right wrists | 76-83 left-right indexes
+                w_pose_a = w_pose_row2[60:68] + w_pose_row2[76:84]
+                w_pose_row.append(w_pose_a)
+
+            else:
+                w_pose_row = list(np.array([np.nan] * 16).flatten())
+
             # make a row to write to  the csv
-            new_row = pose_row + lefty_row + righty_row + face_row
+            new_row = pose_row + lefty_row + righty_row + face_row + w_pose_row
 
             # insert time info
             new_row.insert(0, timee)
@@ -399,10 +468,10 @@ for ff in eachfile:
             # uncommenting below because docker doesn't have access to my display, so it can't show real-time video
             # cv2.imshow('MediaPipe Holistic', cv2.flip(image, 1))
             timee += (1000 / samplerate)  # for the next iteration
-            print(f"FPS: {np.round(fps2, 2)} at {timee/1000} secs")
+            print(f"FPS: {np.round(fps2, 2)} at {timee / 1000} secs")
 
             # append row to the csv
-            with open(csvoutput+ff[:-4]+'.csv', mode='a', newline='') as f2:
+            with open(csvoutput + ff[:-4] + '.csv', mode='a', newline='') as f2:
                 csv_writer = csv.writer(f2, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 csv_writer.writerow(new_row)
 
