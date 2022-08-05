@@ -43,10 +43,10 @@ hand_right_markers = ['WRIST_R', 'THUMB_CPC_R', 'THUMB_MCP_R', 'THUMB_IP_R', 'TH
                       'PINKY_DIP_R', 'PINKY_TIP_R']
 
 # for estimations - not a mediapipe solution unlike above
-lean_markers = ["LEAN_X", "LEAN_Y", "LEAN_Z", "TORSO_LEAN", "ALTER_LEAN", "NECK_X", "NECK_Y", "NECK_Z",
-                "MHIP_X", "MHIP_Y", "MHIP_Z"]
-head_markers = ["HEAD_X", "HEAD_Y", "HEAD_Z", "HEAD_DIRECTION", "HEAD_TILT", "BLINK_RATIO", "BLINK", "FOREHEAD_X",
-                "FOREHEAD_Y", "FOREHEAD_Z"]
+lean_markers = ['LEAN_X', 'LEAN_Y', 'LEAN_Z', 'TORSO_LEAN', 'ALTER_LEAN', 'NECK_X', 'NECK_Y', 'NECK_Z',
+                'MHIP_X', 'MHIP_Y', 'MHIP_Z']
+head_markers = ['HEAD_X', 'HEAD_Y', 'HEAD_Z', 'HEAD_DIRECTION', 'HEAD_TILT', 'BLINK_RATIO', 'BLINK', 'FOREHEAD_X',
+                'FOREHEAD_Y', 'FOREHEAD_Z']
 time_row = ['TIME']
 
 pose_markers2 = []
@@ -77,6 +77,7 @@ markerz = pose_markers2 + lean_markers + twohands_markers2 + head_markers + w_po
 whole_row = time_row + markerz  # + face_markers
 
 # loop through all the video files
+
 for ff in eachfile:
     timee = 0  # this will contain time information in the loop
     start_time = time.time()  # real time
@@ -95,7 +96,7 @@ for ff in eachfile:
     frameHeight = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    # below deals with camera calibration. I am a little out of my depth here...
+    # below deals with camera calibration.
     # they are used in head, torso estimation using various matrices
     # camera matrix
     focal_length = 1 * frameWidth
@@ -107,9 +108,9 @@ for ff in eachfile:
     dist_matrix = np.zeros((4, 1), dtype=np.float64)
 
     # prepare video output with drawings
-    samplerate = fps  # make it the same as current video # may need to reduce quality for faster processing later
-    fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')  # (*'mp4v') also an option
-    vidout = cv2.VideoWriter(videooutput + ff[:-4] + '.avi', fourcc, fps=samplerate,
+    samplerate = fps  # make it the same as current video
+    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')  # (*'xvid') also an option
+    vidout = cv2.VideoWriter(videooutput + ff[:-4] + '.mp4', fourcc, fps=samplerate,
                              frameSize=(int(frameWidth), int(frameHeight)))
 
     # main routine
@@ -184,72 +185,57 @@ for ff in eachfile:
                 # hips are problematic here as mp predicts them without really detecting them, which introduces jitters
                 # the reason I am passing them is that solvePnP requires more than two points. I had intended to use
                 # only left and right shoulders here (11 and 12)...
+                # it also estimates neck and midhip locations from these points for gesture space estimations later on.
                 lean_2d = []
                 lean_3d = []
                 neck_3d = []
                 midhip_3d = []
                 for idx, lm in enumerate(pose):
-                    l_shoulder_2d = ()
-                    l_shoulder_3d = ()
-                    r_shoulder_2d = ()
-                    r_shoulder_3d = ()
-                    l_hip_2d = ()
-                    l_hip_3d = ()
-                    r_hip_2d = ()
-                    r_hip_3d = ()
+
                     if idx == 11 or idx == 12 or idx == 23 or idx == 24:  # landmark numbers
+
                         if idx == 11:
                             l_shoulder_2d = (lm.x * frameWidth, lm.y * frameHeight)  # for later use in projection
-                            l_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)  # random 2000
+                            l_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
                             l_shoulder_dis = lm.z * frameWidth
+
                         if idx == 12:
                             r_shoulder_2d = (lm.x * frameWidth, lm.y * frameHeight)
                             r_shoulder_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
                             r_shoulder_dis = lm.z * frameWidth
 
-                        if len(l_shoulder_3d) and len(r_shoulder_3d) != 0:
-                            # locate neck half way between left and right shoulders
-                            neck_x = r_shoulder_3d[0] + ((l_shoulder_3d[0] - r_shoulder_3d[0]) / 2)
-                            neck_y = r_shoulder_3d[1] + ((l_shoulder_3d[1] - r_shoulder_3d[1]) / 2)
-                            neck_z = l_shoulder_3d[2] + ((r_shoulder_3d[2] - l_shoulder_3d[2]) / 2)
-                            neck_3d.append([neck_x, neck_y, neck_z])
-
-                        else:
-                            neck_3d.append([np.nan] * 3)
-
                         if idx == 23:
-                            l_hip_2d = (lm.x * frameWidth, lm.y * frameHeight)  # for later use in projection
-                            l_hip_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)  # random 2000
+                            l_hip_2d = (lm.x * frameWidth, lm.y * frameHeight)
+                            l_hip_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
 
                         if idx == 24:
                             r_hip_2d = (lm.x * frameWidth, lm.y * frameHeight)
                             r_hip_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
 
-                        if len(l_hip_3d) and len(r_hip_3d) != 0:
-                            # locate mid half way between left and right hips
-                            hip_x = r_hip_3d[0] + ((l_hip_3d[0] - r_hip_3d[0]) / 2)
-                            hip_y = r_hip_3d[1] + ((l_shoulder_3d[1] - r_hip_3d[1]) / 2)
-                            hip_z = l_hip_3d[2] + ((r_hip_3d[2] - l_hip_3d[2]) / 2)
-                            midhip_3d.append([hip_x, hip_y, hip_z])
-
-                        else:
-                            midhip_3d.append([np.nan] * 3)
-
-                        lean_x, lean_y, lean_z = int(lm.x * frameWidth), int(lm.y * frameHeight), \
-                                                 int(lm.z * frameWidth)
-
+                        lean_x, lean_y, lean_z = int(lm.x * frameWidth), int(lm.y * frameHeight), lm.z
                         lean_2d.append([lean_x, lean_y])
                         lean_3d.append([lean_x, lean_y, lean_z])
 
                 lean_2d = np.array(lean_2d, dtype=np.float64)
                 lean_3d = np.array(lean_3d, dtype=np.float64)
 
+                # locate neck halfway between left and right shoulders
+                neck_3d = list(np.array([int(r_shoulder_3d[0] + ((l_shoulder_3d[0] - r_shoulder_3d[0]) / 2)),
+                                         int(r_shoulder_3d[1] + ((l_shoulder_3d[1] - r_shoulder_3d[1]) / 2)),
+                                         int(l_shoulder_3d[2] + (
+                                                     (r_shoulder_3d[2] - l_shoulder_3d[2]) / 2))]).flatten())
+
+                # locate mid-hip halfway between left and right edges of the hip
+                midhip_3d = list(np.array([int(r_hip_3d[0] + ((l_hip_3d[0] - r_hip_3d[0]) / 2)),
+                                           int(r_hip_3d[1] + ((l_shoulder_3d[1] - r_hip_3d[1]) / 2)),
+                                           int(l_hip_3d[2] + ((r_hip_3d[2] - l_hip_3d[2]) / 2))]).flatten())
+
                 # PnP - different from the one for head as this is described to be more error-resistant
                 # ==> see the point about hips above
                 success2, rot_vec2, trans_vec2, inliers = cv2.solvePnPRansac(lean_3d, lean_2d, cam_matrix, dist_matrix)
 
                 # Rotation matrix
-                rotmat2, jac2 = cv2.Rodrigues(rot_vec2)
+                rotmat2, jac0 = cv2.Rodrigues(rot_vec2)
 
                 # torso angles around axes
                 angles2, mtxR2, mtxQ2, Qx2, Qy2, Qz2 = cv2.RQDecomp3x3(rotmat2)
@@ -278,12 +264,12 @@ for ff in eachfile:
                     alter_lean = "Upright"
 
                 # drawing shoulder projection
-                l_shoulder_3d_projection, jacobian_l = cv2.projectPoints(l_shoulder_3d, rot_vec2, trans_vec2,
-                                                                         cam_matrix, dist_matrix)
-                r_shoulder_3d_projection, jacobian_r = cv2.projectPoints(r_shoulder_3d, rot_vec2, trans_vec2,
-                                                                         cam_matrix, dist_matrix)
-                # it seems like the projections above are not necessary
-                # l_shoulder_3d projection can replace what l2 but the result is worse somehow...
+                l_shoulder_3d_projection, _ = cv2.projectPoints(l_shoulder_3d, rot_vec2, trans_vec2,
+                                                                cam_matrix, dist_matrix)
+
+                r_shoulder_3d_projection, _ = cv2.projectPoints(r_shoulder_3d, rot_vec2, trans_vec2,
+                                                                cam_matrix, dist_matrix)
+
                 l1 = (int(l_shoulder_2d[0]), int(l_shoulder_2d[1]))
                 l2 = (int(l_shoulder_2d[0] + lean_y * 10), int(l_shoulder_2d[1] - lean_x * 10))
                 cv2.line(image, l1, l2, (255, 0, 255), 2)
@@ -293,9 +279,9 @@ for ff in eachfile:
                 cv2.line(image, r1, r2, (128, 0, 128), 2)
 
                 # add to pose rows
-                lean_row = [np.round(lean_x, 6), np.round(lean_y, 6), np.round(lean_z, 6),
-                            torso_text, alter_lean, neck_3d, midhip_3d]
-                pose_row = pose_row + lean_row
+                lean_row = [np.round(lean_x, 3), np.round(lean_y, 3), np.round(lean_z, 3),
+                            torso_text, alter_lean]
+                pose_row = pose_row + lean_row + neck_3d + midhip_3d
 
                 # draw on the video
                 cv2.putText(image, "Torso: " + torso_text, (1600, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128),
@@ -310,8 +296,8 @@ for ff in eachfile:
                 cv2.putText(image, "z: " + str(np.round(lean_z, 2)), (1600, 500),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
             else:
-                pose_row = list(np.array([np.nan] * 34 * 4 + 4 + 3).flatten())
-                # above will crash --- add up the numbers properly yourself ---
+                pose_row = list(np.array([np.nan] * 139).flatten())
+
             # get hand information
             lefty_row = []
             if results.left_hand_landmarks:
@@ -319,7 +305,7 @@ for ff in eachfile:
                 lefty_row = list(
                     np.array([[int(landmark.x * frameWidth),
                                int(landmark.y * frameHeight),
-                               int(landmark.z, *frameWidth)] for landmark in lefty]).flatten())
+                               int(landmark.z * frameWidth)] for landmark in lefty]).flatten())
             else:
                 lefty_row = list(np.array([np.nan] * 21 * 3).flatten())
 
@@ -340,26 +326,27 @@ for ff in eachfile:
             forehead = []
             if results.face_landmarks:
                 face = results.face_landmarks.landmark
-                ratio = blink_ratio(image, face)
+                ratio = blink_ratio(image, face, frameWidth, frameHeight)
                 for idx, lm in enumerate(face):
                     if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199:  # landmark numbers
                         if idx == 1:
-                            nose_2d = (lm.x * frameWidth, lm.y * frameHeight)  # for later use in estimation
+                            nose_2d = (lm.x * frameWidth, lm.y * frameHeight)
                             nose_3d = (lm.x * frameWidth, lm.y * frameHeight, lm.z * frameWidth)
 
-                        head_x, head_y, head_z = int(lm.x * frameWidth), int(lm.y * frameHeight), \
-                                                 int(lm.z * frameWidth)
+                        # z scaling seems to cause errors in PnP calculations to follow so no * frameWidth for z
+                        head_x2, head_y2, head_z2 = int(lm.x * frameWidth), int(lm.y * frameHeight), lm.z
 
-                        face_2d.append([head_x, head_y])
-                        face_3d.append([head_x, head_y, head_z])
+                        face_2d.append([head_x2, head_y2])
+                        face_3d.append([head_x2, head_y2, head_z2])
 
                     if idx == 454:
-                        coords = tuple(np.multiply(np.array((lm.x, lm.y)), [1920, 1080]).astype(int))
+                        coords = tuple(np.multiply(np.array((lm.x, lm.y)), [frameWidth, frameHeight]).astype(int))
 
                     if idx == 9:
-                        fhead_x, fhead_y, fhead_z = int(lm.x * frameWidth), int(lm.y * frameHeight), \
-                                                    int(lm.z * frameWidth)
-                        forehead.append = ([fhead_x, fhead_y, fhead_z])
+                        fhead_x, fhead_y, fhead_z = int(lm.x * frameWidth), int(lm.y * frameHeight), int(
+                            lm.z * frameWidth)
+
+                        forehead = list(np.array([fhead_x, fhead_y, fhead_z]).flatten())
 
                 face_2d = np.array(face_2d, dtype=np.float64)
                 face_3d = np.array(face_3d, dtype=np.float64)
@@ -368,7 +355,7 @@ for ff in eachfile:
                 success1, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
 
                 # Rotational matrix
-                rotmat, jac = cv2.Rodrigues(rot_vec)
+                rotmat, jac1 = cv2.Rodrigues(rot_vec)
 
                 # Head angles around axes
                 angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rotmat)
@@ -403,12 +390,15 @@ for ff in eachfile:
                     ratio2 = "Open"
 
                 # writing rows
-                face_row = [np.round(head_x, 6), np.round(head_y, 6), np.round(head_z, 6),
-                            text, text2, np.round(ratio, 2), ratio2, forehead]
+                face_row = [np.round(head_x, 3), np.round(head_y, 3), np.round(head_z, 3),
+                            text, text2, np.round(ratio, 3), ratio2]
+
+                face_row = face_row + forehead
 
                 # to draw nose projection and blinks on the image
-                nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec,
-                                                                 cam_matrix, dist_matrix)
+                nose_3d_projection, _ = cv2.projectPoints(nose_3d, rot_vec, trans_vec,
+                                                          cam_matrix, dist_matrix)
+
                 # the first output of the above can go into p2 definition like nose_3d_projection[0][0][0] for example
                 p1 = (int(nose_2d[0]), int(nose_2d[1]))
                 p2 = (int(nose_2d[0] + head_y * 50), int(nose_2d[1] - head_x * 50))
@@ -433,18 +423,17 @@ for ff in eachfile:
 
             # this gives world coordinates of wrists and hands in metres with mid hip being 0
             w_pose_row = []
-            if results.world.pose.landmarks:
-                w_pose = results.world_pose_landmarks.landmark
-                # division by 100 to get values in cms
+            if results.pose_world_landmarks:
+                w_pose = results.pose_world_landmarks.landmark
+                # * 100 to get values in cms
                 w_pose_row2 = list(
-                    np.array([[int(landmark.x / 100),
-                               int(landmark.y / 100),
-                               int(landmark.z / 100),
+                    np.array([[int(landmark.x * 100),
+                               int(landmark.y * 100),
+                               int(landmark.z * 100),
                                np.round(landmark.visibility, 6)] for landmark in w_pose]).flatten())
 
                 # 60-67 left-right wrists | 76-83 left-right indexes
-                w_pose_a = w_pose_row2[60:68] + w_pose_row2[76:84]
-                w_pose_row.append(w_pose_a)
+                w_pose_row = w_pose_row2[60:68] + w_pose_row2[76:84]
 
             else:
                 w_pose_row = list(np.array([np.nan] * 16).flatten())
@@ -481,7 +470,9 @@ for ff in eachfile:
     vidout.release()
     cap.release()
     cv2.destroyAllWindows()
+
     print(f'Working on post-tracking processes of {ff}, started at {time.strftime("%H:%M:%S", time.localtime())}')
+
     # linear interpolation up to 500ms of missing data
     itp = pd.read_csv(csvoutput + ff[:-4] + '.csv')
     itp.interpolate(limit=25, inplace=True, limit_direction='both')
@@ -491,23 +482,34 @@ for ff in eachfile:
     # a landmark in the middle of the forehead is sliced to calculate head movement speed
     # alternatives are possible
     # sliced dataframes are named to create column names to be added to the original dataframe
+
     l_wrist = itp[["X_LEFT_WRIST", "Y_LEFT_WRIST", "Z_LEFT_WRIST"]]
     l_wrist.name = "L_WRIST"
     r_wrist = itp[["X_RIGHT_WRIST", "Y_RIGHT_WRIST", "Z_RIGHT_WRIST"]]
     r_wrist.name = "R_WRIST"
-    l_index = itp[["X_INDEX_FINGER_TIP_L", "Y_INDEX_FINGER_TIP_L", "Z_INDEX_FINGER_TIP_L"]]
+    l_index = itp[["X_LEFT_INDEX", "Y_LEFT_INDEX", "Z_LEFT_INDEX"]]
     l_index.name = "L_INDEX"
-    r_index = itp[["X_INDEX_FINGER_TIP_R", "Y_INDEX_FINGER_TIP_R", "Z_INDEX_FINGER_TIP_R"]]
+    r_index = itp[["X_RIGHT_INDEX", "Y_RIGHT_INDEX", "Z_RIGHT_INDEX"]]
     r_index.name = "R_INDEX"
     fhead = itp[["FOREHEAD_X", "FOREHEAD_Y", "FOREHEAD_Z"]]
     fhead.name = "FHEAD"
 
-    # calculating velocity and acceleration
-    vlw = velo_acc_calc(l_wrist)
-    vrw = velo_acc_calc(r_wrist)
-    vli = velo_acc_calc(l_index)
-    vri = velo_acc_calc(r_index)
-    vf = velo_acc_calc(fhead)
+    # calculating velocity, acceleration, velocity peak locations, peak prominences, and peak widths
+    # below arbitrary thresholds required for calculations - all can be adjusted later on
+    vel_threshold = 700  # arbitrary threshold to decide whether there is movement
+    acc_threshold = 7000  # as above but to decide high amp vs. low amp movement
+    # number of frames to decide on gesture segmentation and numbering
+    # that is, if there is this number of frame between two movement clusters than these are considered as one unit
+    count_threshold = 5
+    # parameters for peak related calculations (see signal.find_peaks)
+    height, prominence, width, distance = 200, 200, 0, 4
+    conditions = fps, vel_threshold, acc_threshold, count_threshold, height, prominence, width, distance
+
+    vlw = velo_acc_calc(l_wrist, *conditions)
+    vrw = velo_acc_calc(r_wrist, *conditions)
+    vli = velo_acc_calc(l_index, *conditions)
+    vri = velo_acc_calc(r_index, *conditions)
+    vf = velo_acc_calc(fhead, *conditions)
 
     # adding these to the original dataframe
     itp2 = pd.DataFrame()
@@ -525,5 +527,3 @@ for ff in eachfile:
     end_time = time.time()
     print(f'###########{ff} ended at {time.strftime("%H:%M:%S", time.localtime())}'
           f'and took {(end_time - start_time) / 60} mins ###########')
-
-    # interpolation of NAs can be integrated into this

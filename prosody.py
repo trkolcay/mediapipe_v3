@@ -50,6 +50,7 @@ for qq in eachsound:
     # linear interpolation
     itp = pd.read_csv(soundoutput + qq[:-4] + '.csv')
     itp.interpolate(limit=12, inplace=True, limit_direction='both')
+    itp = np.round(itp, 1)
     itp.to_csv(inter_pol + qq[:-4] + '.csv', index=False, na_rep='nan')
 
     end_time = time.time()
