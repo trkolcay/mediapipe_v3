@@ -19,7 +19,7 @@ for qq in eachsound:
     print(f'Working on {qq} at {time.strftime("%H:%M:%S", time.localtime())}')
 
     # initialise a csv with headers
-    columns = ["Hz", "dB"]
+    columns = ["Hz", "dB", "CPP"]
     with open(soundoutput + qq[:-4] + '.csv', mode='w', newline='') as cs3:
         csv_writer = csv.writer(cs3, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow(columns)
@@ -36,12 +36,18 @@ for qq in eachsound:
     # So I will get high resolution sampling with a timestep of 1ms and then interpolate
     tointens = call(wavfile, 'To Intensity', 75, 0.001, True)
     topitch = call(wavfile, 'To Pitch', 0.001, 75, 600)
-
+    
     # Now extract the readings at every 20ms only so that it aligns with the video data
     for i in np.arange(tmin, tmax, 0.02):
         intensity = call(tointens, "Get value at time", i, 'cubic')
         pitch = call(topitch, 'Get value at time', i, 'Hertz', 'Linear')
-        columns2 = [pitch, intensity]
+               
+        t_s = call(wavfile, 'Extract part', i, i+0.2, 'rectangular', 1, False)
+        power_cepstrogram = call(t_s, "To PowerCepstrogram", 60.0, 0.002, 5000.0, 50)
+        cpps = call(power_cepstrogram, "Get CPPS", False, 0.02, 0.0005, 60.0, 330.0, 0.05, \
+                    'Parabolic', 0.001, 0.05, 'Straight', 'Robust')
+        
+        columns2 = [np.round(pitch, 1), np.round(intensity, 1), np.round(cpps, 1)]
         with open(soundoutput + qq[:-4] + '.csv', mode='a', newline='') as cs4:
             csv_writer = csv.writer(cs4, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(columns2)
@@ -51,7 +57,7 @@ for qq in eachsound:
     itp = pd.read_csv(soundoutput + qq[:-4] + '.csv')
     itp.interpolate(limit=12, inplace=True, limit_direction='both')
     itp = np.round(itp, 1)
-    itp.to_csv(inter_pol + qq[:-4] + '.csv', index=False, na_rep='nan')
+    itp.to_csv(inter_pol + qq[:-4] + '.csv', na_rep='nan', index=False)
 
     end_time = time.time()
     duration = end_time - start_time

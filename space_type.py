@@ -2,6 +2,8 @@
 import pandas as pd
 import numpy as np
 from scipy import stats, signal
+import math
+from pandas import Series
 
 
 # defines gesture space as per
@@ -172,3 +174,276 @@ def g_space_assign(df):
 
     return g_space
 
+
+# to determine hand shape to estimate deixis based on the distance between the tip of the index and the ring finger for both hands
+def deic_shape(df, dist_ts):
+    columnssss = ["LEFT_DEIC_DIS", "LEFT_DEIC_DET", "RIGHT_DEIC_DIS", "RIGHT_DEIC_DET"]
+
+    left_deic_dis = []
+    left_deic_det = []
+    right_deic_dis = []
+    right_deic_det = []
+
+    for j in range(len(df)):
+
+        # left # ordered list of columns to call with col index later <= reminder
+        if pd.isna(df.loc[j, ['X_INDEX_FINGER_TIP_L', 'Y_INDEX_FINGER_TIP_L', 'Z_INDEX_FINGER_TIP_L',
+                              'X_RING_FINGER_TIP_L', 'Y_RING_FINGER_TIP_L', 'Z_RING_FINGER_TIP_L']]).all() == False:
+
+            euc_norm = math.sqrt((df.iloc[j, 0] - df.iloc[j, 3]) ** 2 +
+                                 (df.iloc[j, 1] - df.iloc[j, 4]) ** 2 +
+                                 (df.iloc[j, 2] - df.iloc[j, 5]) ** 2)
+
+            left_deic_dis.append(int(euc_norm))
+
+            if euc_norm >= dist_ts:
+
+                left_deic_det.append("Pointy")
+
+            else:
+
+                left_deic_det.append(np.nan)
+
+        else:
+
+            left_deic_dis.append(np.nan)
+            left_deic_det.append(np.nan)
+
+        # right
+        if pd.isna(df.loc[j, ['X_INDEX_FINGER_TIP_R', 'Y_INDEX_FINGER_TIP_R', 'Z_INDEX_FINGER_TIP_R',
+                              'X_RING_FINGER_TIP_R', 'Y_RING_FINGER_TIP_R', 'Z_RING_FINGER_TIP_R']]).all() == False:
+
+            euc_norm2 = math.sqrt((df.iloc[j, 6] - df.iloc[j, 9]) ** 2 +
+                                  (df.iloc[j, 7] - df.iloc[j, 10]) ** 2 +
+                                  (df.iloc[j, 8] - df.iloc[j, 11]) ** 2)
+
+            right_deic_dis.append(int(euc_norm2))
+
+            if euc_norm2 >= dist_ts:
+
+                right_deic_det.append("Pointy")
+
+            else:
+
+                right_deic_det.append(np.nan)
+
+        else:
+
+            right_deic_dis.append(np.nan)
+            right_deic_det.append(np.nan)
+
+    df2 = pd.DataFrame()
+    df2[0] = left_deic_dis
+    df2[1] = left_deic_det
+    df2[2] = right_deic_dis
+    df2[3] = right_deic_det
+
+    df2.columns = columnssss
+
+    return df2
+
+
+# this determines gesture type based on hand shape, position, duration, peak related info
+# first representational vs. non-representational distinction
+# then within-representational distinctions
+
+def g_type(df, beat_dur, p_no, p_prom, p_width, *, hand):
+    nn = 1  # counter
+    df[13] = np.nan
+
+    if Series.last_valid_index(df.iloc[:, 0]):
+
+        while nn <= int(df.iloc[Series.last_valid_index(df.iloc[:, 0]), 0]):
+
+            idx_list = np.array(df.index[df.iloc[:, 0] == nn])  # indexes
+
+            b = idx_list[0]
+            e = idx_list[-1] + 1
+
+            # interim gesture type decisions based on parameters contained in the following
+
+            level_1 = []
+            level_2 = []
+
+            # duration
+
+            if len(df.iloc[b:e, 0]) <= beat_dur:
+
+                level_1.append("Beat")
+
+            else:
+
+                level_1.append("Rep")
+
+            # peak number
+
+            if df.iloc[b:e, 1].count() <= p_no:
+
+                level_1.append("Beat")
+
+            else:
+
+                level_1.append("Rep")
+
+            # peak prominence
+
+            if (df.iloc[b:e, 1].dropna() >= p_prom).any() == True:
+
+                level_1.append("Rep")
+
+            else:
+
+                level_1.append("Beat")
+
+            # peak width
+
+            if (df.iloc[b:e, 2].dropna() >= p_width).any() == True:
+
+                level_1.append("Rep")
+
+            else:
+
+                level_1.append("Beat")
+
+            if stats.mode(level_1)[0][0] == "Beat":
+
+                interim = "Beat"
+
+            else:
+
+                interim = "Rep"
+
+            if interim == "Beat":
+
+                if hand == "left":
+
+                    # pixel count (only y dimension)
+
+                    if stats.mode(df.iloc[b:e, 4].dropna())[0][0] == "Up" or \
+                            stats.mode(df.iloc[b:e, 4].dropna())[0][0] == "Extra Up":
+                        interim = "Rep"
+
+                if hand == "right":
+
+                    if stats.mode(df.iloc[b:e, 7].dropna())[0][0] == "Up" or \
+                            stats.mode(df.iloc[b:e, 7].dropna())[0][0] == "Extra Up":
+                        interim = "Rep"
+
+                if interim == "Beat":
+
+                    df.iloc[b:e, 13] = interim
+
+                else:
+
+                    pass
+
+            # Representational vs. non-representational gesture decision is made above
+            # The following tries to distinguish deictics from iconics/metaphorics
+
+            if interim == "Rep":
+
+                if hand == "left":
+
+                    # pixel count (only y dimension)
+
+                    if stats.mode(df.iloc[b:e, 4].dropna())[0][0] == "Up" or \
+                            stats.mode(df.iloc[b:e, 4].dropna())[0][0] == "Extra Up" or \
+                            stats.mode(df.iloc[b:e, 4].dropna())[0][0] == "Down":
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                    # distance from mid hip
+
+                    if stats.mode(df.iloc[b:e, 5].dropna())[0][0] == "Away":
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                    # hand space
+
+                    if stats.mode(df.iloc[b:e, 3].dropna())[0][0] == "Periphery" or \
+                            stats.mode(df.iloc[b:e, 3].dropna())[0][0] == "Ex-Periphery":
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                    # hand shape
+
+                    if df.iloc[b:e, 10].count() >= (len(df.iloc[b:e, 0])) / 2:
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                if hand == "right":
+
+                    # pixel count (only y dimension)
+
+                    if stats.mode(df.iloc[b:e, 7].dropna())[0][0] == "Up" or \
+                            stats.mode(df.iloc[b:e, 7].dropna())[0][0] == "Extra Up" or \
+                            stats.mode(df.iloc[b:e, 7].dropna())[0][0] == "Down":
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                        # distance from mid hip
+
+                    if stats.mode(df.iloc[b:e, 8] == "Away"):
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                    # hand space
+
+                    if stats.mode(df.iloc[b:e, 6].dropna())[0][0] == "Periphery" or \
+                            stats.mode(df.iloc[b:e, 6].dropna())[0][0] == "Ex-Periphery":
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                    # hand shape
+
+                    if df.iloc[b:e, 12].count() >= (len(df.iloc[b:e, 0])) / 2:
+
+                        level_2.append("Deictic")
+
+                    else:
+
+                        level_2.append("Icon/Meta")
+
+                final = stats.mode(level_2)[0][0]
+
+                df.iloc[b:e, 13] = final
+
+            nn += 1
+
+    if hand == 'left':
+
+        df.rename(columns={13: 'G_TYPE_LEFT'}, inplace=True)
+
+    elif hand == 'right':
+
+        df.rename(columns={13: 'G_TYPE_RIGHT'}, inplace=True)
+
+    return df

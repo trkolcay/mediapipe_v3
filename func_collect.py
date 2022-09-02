@@ -148,20 +148,24 @@ def velo_acc_calc(df, fps, vel_threshold, acc_threshold, count_threshold, height
     df2[9] = np.nan
     df2.iloc[:, 9] = df2.iloc[:, 7]
 
-    for m in range(len(df2) - 1):
+    for m in range(len(df2) - (count_threshold + 2)):
 
         if pd.isna(df2.iloc[m, 9]) == False and pd.isna(df2.iloc[m + 1, 9]) == True:
 
-            idx_temp = np.where(df2.iloc[m + 1:, 9].notna())[0][0]
+            if len(np.where(df2.iloc[m + 1:, 9].notna())[0]) > 0:
 
-            if idx_temp <= count_threshold:
-                df2.iloc[m:m + count_threshold + 1, 9] = "Movement"
+                idx_temp = np.where(df2.iloc[m + 1:, 9].notna())[0][0]
+
+                if idx_temp <= count_threshold:
+                    df2.iloc[m:m + count_threshold + 1, 9] = "Movement"
 
         elif pd.isna(df2.iloc[m, 9]) == True and pd.isna(df2.iloc[m + 1, 9]) == False:
-            idx_temp2 = np.where(df2.iloc[m + 1:, 9].isna())[0][0]
+            if len(np.where(df2.iloc[m + 1:, 9].isna())[0]) > 0:
 
-            if idx_temp2 <= count_threshold:
-                df2.iloc[m:m + count_threshold + 1, 9] = np.nan
+                idx_temp2 = np.where(df2.iloc[m + 1:, 9].isna())[0][0]
+
+                if idx_temp2 <= count_threshold:
+                    df2.iloc[m:m + count_threshold + 1, 9] = np.nan
 
     # below numbers individual movements
 
@@ -188,23 +192,27 @@ def velo_acc_calc(df, fps, vel_threshold, acc_threshold, count_threshold, height
 
     ii = 1
 
-    while ii <= int(df2.iloc[Series.last_valid_index(df2.iloc[:, 10]), 10]):
+    if Series.last_valid_index(df2.iloc[:, 10]):
 
-        idx_list = np.array(df2.index[df2.iloc[:, 10] == ii])
+        while ii <= int(df2.iloc[Series.last_valid_index(df2.iloc[:, 10]), 10]):
 
-        peak_idx, peak_dict = signal.find_peaks(df2.iloc[idx_list[0]:idx_list[-1] + 1, 4],
-                                                height=height, prominence=prominence, width=width, distance=distance)
+            idx_list = np.array(df2.index[df2.iloc[:, 10] == ii])
 
-        temp1 = {'peak_indices': peak_idx}
+            peak_idx, peak_dict = signal.find_peaks(df2.iloc[idx_list[0]:idx_list[-1] + 1, 4],
+                                                    height=height, prominence=prominence, width=width,
+                                                    distance=distance)
 
-        peak_dict.update(temp1)
+            temp1 = {'peak_indices': peak_idx}
 
-        for pp in range(len(peak_dict['peak_indices'])):
-            df2.iloc[idx_list[0] + peak_dict['peak_indices'][pp], 11] = int(np.round(peak_dict['prominences'][pp], 0))
+            peak_dict.update(temp1)
 
-            df2.iloc[idx_list[0] + peak_dict['peak_indices'][pp], 12] = int(np.round(peak_dict['widths'][pp], 0))
+            for pp in range(len(peak_dict['peak_indices'])):
+                df2.iloc[idx_list[0] + peak_dict['peak_indices'][pp], 11] = int(
+                    np.round(peak_dict['prominences'][pp], 0))
 
-        ii += 1
+                df2.iloc[idx_list[0] + peak_dict['peak_indices'][pp], 12] = int(np.round(peak_dict['widths'][pp], 0))
+
+            ii += 1
 
     # rename columns as per above
     df2.columns = column_names
