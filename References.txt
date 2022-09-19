@@ -1,4 +1,4 @@
-The scripts above contains ideas and adaptions from the sources below:
+The scripts in this repo contains ideas and adaptions from the sources below:
 
     Cwiek, A., De Melo, G., Edelman, J., Owoyele, B., Pouw, W., Santuber, J. Trujillo, J.. (2021)
     Envision Toolbox: Multimodal (Signal) Processing and Analysis in Communication.
